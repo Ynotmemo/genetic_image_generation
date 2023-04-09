@@ -3,8 +3,9 @@ use ndarray_rand::RandomExt;
 use ndarray_rand::rand::SeedableRng;
 use ndarray_rand::rand_distr::Uniform;
 use rand_isaac::isaac64::Isaac64Rng;
+use rayon::prelude::*;
 
-const POPULATIONS: usize = 100;
+const POPULATIONS: usize = 10;
 const SEED: u64 = 0;
 const IMAGE_SIZE: [usize; 2] = [400; 2];
 
@@ -32,19 +33,18 @@ impl Individual {
 
 // 第一世代を生成
 fn initialize_generation(populations: usize, image_size: [usize; 2]) -> Vec<Individual> {
-    let mut rng = Isaac64Rng::seed_from_u64(SEED);
-    let mut generation = Vec::new();
+    let seeds: Vec<u64> = (0..populations).map(|i| SEED.wrapping_add(i as u64)).collect();
 
-    for _ in 0..populations {
-        let mut genom_buffer = Vec::new();
-        genom_buffer.extend([
+    let generation: Vec<Individual> = seeds.into_par_iter().map(|seed| {
+        let mut rng = Isaac64Rng::seed_from_u64(seed);
+        let genom_buffer= [
             Array::random_using(image_size, Uniform::new(0, 256), &mut rng),
             Array::random_using(image_size, Uniform::new(0, 256), &mut rng),
             Array::random_using(image_size, Uniform::new(0, 256), &mut rng),
-        ].iter().cloned());
-        let individual = Individual::new(genom_buffer);
-        generation.push(individual);
-    }
+        ].to_vec();
+        Individual::new(genom_buffer)
+    }).collect();
+
     generation
 }
 
