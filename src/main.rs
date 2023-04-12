@@ -1,30 +1,24 @@
-use image::{DynamicImage, GenericImageView};
-use ndarray::{Array, Array2};
-use ndarray_rand::RandomExt;
-use ndarray_rand::rand::SeedableRng;
-use ndarray_rand::rand_distr::Uniform;
-use rand_isaac::isaac64::Isaac64Rng;
+use image::{DynamicImage, GenericImageView, ImageBuffer, Rgb};
+use rand::distributions::Uniform;
+use rand::prelude::*;
 use rayon::prelude::*;
-
 
 const POPULATIONS: usize = 10;
 const SEED: u64 = 0;
-const IMAGE_SIZE: [usize; 2] = [400; 2];
+const IMAGE_SIZE: (u32, u32) = (400, 400);
 
 // 各個体の構造体を定義
 struct Individual {
-    genom_buffer: Vec<Array2<i32>>,
+    genom_buffer: ImageBuffer<Rgb<u8>, Vec<u8>>,
     fitness: i32,
 }
 
 impl Individual {
-    fn new(genom_buffer: Vec<Array2<i32>>) -> Self {
-        let individual = Individual {
+    fn new(genom_buffer: ImageBuffer<Rgb<u8>, Vec<u8>>) -> Self {
+        Individual {
             genom_buffer,
             fitness: 0,
-        };
-        // individual.set_fitness();
-        individual
+        }
     }
 
     // 目標画像とのSSIMを算出
@@ -35,56 +29,57 @@ impl Individual {
 
 // 画像ファイルの読み込み
 fn load_image(file_path: &str) -> DynamicImage {
-    image::open(file_path).unwrap()
+    image::open(file_path).expect("Failed to open image")
 }
 
-//画像サイズの変更
+// 画像サイズの変更
 fn resize_image(image: DynamicImage, width: u32, height: u32) -> DynamicImage {
     image.resize_exact(width, height, image::imageops::FilterType::Lanczos3)
 }
 
 // 第一世代を生成
-fn initialize_generation(populations: usize, image_size: [usize; 2]) -> Vec<Individual> {
-    let seeds: Vec<u64> = (0..populations).map(|i| SEED.wrapping_add(i as u64)).collect();
-
-    let generation: Vec<Individual> = seeds.into_par_iter().map(|seed| {
-        let mut rng = Isaac64Rng::seed_from_u64(seed);
-        let genom_buffer= [
-            Array::random_using(image_size, Uniform::new(0, 256), &mut rng),
-            Array::random_using(image_size, Uniform::new(0, 256), &mut rng),
-            Array::random_using(image_size, Uniform::new(0, 256), &mut rng),
-        ].to_vec();
-        Individual::new(genom_buffer)
-    }).collect();
-
+fn initialize_generation(populations: usize, image_size: (u32, u32), seed: u64) -> Vec<Individual> {
+    let rng = StdRng::seed_from_u64(seed);
+    let uniform = Uniform::new(0, 255);
+    let generation: Vec<Individual> = (0..populations)
+        .into_par_iter()
+        .map(|_| {
+            let mut rng_clone = rng.clone();
+            let genom_buffer = ImageBuffer::from_fn(image_size.0, image_size.1, |_x, _y| {
+                Rgb([
+                    rng_clone.sample(uniform),
+                    rng_clone.sample(uniform),
+                    rng_clone.sample(uniform),
+                ])
+            });
+            Individual::new(genom_buffer)
+        })
+        .collect();
     generation
 }
 
 #[cfg(test)]
-mod tests{
+mod tests {
     use super::*;
 
     #[test]
     fn create_the_first_generation() {
-        let mut generation: Vec<Individual> =  initialize_generation(POPULATIONS, IMAGE_SIZE);
+        let generation: Vec<Individual> = initialize_generation(POPULATIONS, IMAGE_SIZE, SEED);
 
         assert_eq!(generation.len(), POPULATIONS);
-        assert_eq!(generation[0].genom_buffer.len(), 3);
-        assert_eq!(generation[0].genom_buffer[0].shape(), IMAGE_SIZE);
-        assert_eq!(generation[0].genom_buffer[1].shape(), IMAGE_SIZE);
-        assert_eq!(generation[0].genom_buffer[2].shape(), IMAGE_SIZE);
+        assert_eq!(generation[0].genom_buffer.dimensions(), IMAGE_SIZE);
         assert_eq!(generation[0].fitness, 0);
     }
 
     #[test]
     fn load_resize_image() {
         let file_path = "./data/target_image.jpeg";
-        let mut target_image = load_image(file_path);
-
-        target_image = resize_image(target_image, IMAGE_SIZE[0] as u32, IMAGE_SIZE[1] as u32);
-        let (width, height) = target_image.dimensions();
-        assert_eq!([width as usize, height as usize], IMAGE_SIZE);
+        let target_image = load_image(file_path);
+        let resized_target_image = resize_image(target_image, IMAGE_SIZE.0, IMAGE_SIZE.1);
+        assert_eq!(resized_target_image.dimensions(), IMAGE_SIZE);
     }
 }
 
-fn main() { unimplemented!(); }
+fn main() {
+    unimplemented!();
+}
