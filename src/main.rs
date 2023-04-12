@@ -1,9 +1,11 @@
+use image::{DynamicImage, GenericImageView};
 use ndarray::{Array, Array2};
 use ndarray_rand::RandomExt;
 use ndarray_rand::rand::SeedableRng;
 use ndarray_rand::rand_distr::Uniform;
 use rand_isaac::isaac64::Isaac64Rng;
 use rayon::prelude::*;
+
 
 const POPULATIONS: usize = 10;
 const SEED: u64 = 0;
@@ -25,10 +27,20 @@ impl Individual {
         individual
     }
 
-    // 目標画像との差分を算出
+    // 目標画像とのSSIMを算出
     fn set_fitness(&mut self) {
         unimplemented!()
     }
+}
+
+// 画像ファイルの読み込み
+fn load_image(file_path: &str) -> DynamicImage {
+    image::open(file_path).unwrap()
+}
+
+//画像サイズの変更
+fn resize_image(image: DynamicImage, width: u32, height: u32) -> DynamicImage {
+    image.resize_exact(width, height, image::imageops::FilterType::Lanczos3)
 }
 
 // 第一世代を生成
@@ -63,8 +75,16 @@ mod tests{
         assert_eq!(generation[0].genom_buffer[2].shape(), IMAGE_SIZE);
         assert_eq!(generation[0].fitness, 0);
     }
+
+    #[test]
+    fn load_resize_image() {
+        let file_path = "./data/target_image.jpeg";
+        let mut target_image = load_image(file_path);
+
+        target_image = resize_image(target_image, IMAGE_SIZE[0] as u32, IMAGE_SIZE[1] as u32);
+        let (width, height) = target_image.dimensions();
+        assert_eq!([width as usize, height as usize], IMAGE_SIZE);
+    }
 }
 
-fn main() {
-    unimplemented!();
-}
+fn main() { unimplemented!(); }
