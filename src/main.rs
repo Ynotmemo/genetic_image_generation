@@ -3,6 +3,8 @@ use rand::distributions::Uniform;
 use rand::prelude::*;
 use rayon::prelude::*;
 
+mod utils;
+
 const POPULATIONS: usize = 10;
 const SEED: u64 = 0;
 const IMAGE_SIZE: (u32, u32) = (400, 400);
@@ -22,7 +24,7 @@ impl Individual {
     }
 
     // 目標画像とのSSIMを算出
-    fn set_fitness(&mut self) {
+    fn calc_fitness(&mut self, target_image: &DynamicImage) {
         unimplemented!()
     }
 }
@@ -77,6 +79,14 @@ mod tests {
         let target_image = load_image(file_path);
         let resized_target_image = resize_image(target_image, IMAGE_SIZE.0, IMAGE_SIZE.1);
         assert_eq!(resized_target_image.dimensions(), IMAGE_SIZE);
+    }
+
+    #[test]
+    fn eva_calculate_ssim() {
+        let file_path = "./data/target_image.jpeg";
+        let target_image = load_image(file_path);
+        let ssim = utils::ssim::calculate_ssim(&target_image, &target_image);
+        assert_eq!(ssim, 1 as f64)
     }
 }
 
