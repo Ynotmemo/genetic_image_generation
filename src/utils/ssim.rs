@@ -1,5 +1,4 @@
 use image::GrayImage;
-use std::cmp;
 
 // 画像をグレースケールに変換する関数
 fn convert_to_grayscale(image: &image::DynamicImage) -> GrayImage {
