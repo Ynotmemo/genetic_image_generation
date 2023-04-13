@@ -2,30 +2,32 @@ use image::{DynamicImage, GenericImageView, ImageBuffer, Rgb};
 use rand::distributions::Uniform;
 use rand::prelude::*;
 use rayon::prelude::*;
-
 mod utils;
 
-const POPULATIONS: usize = 10;
+const POPULATIONS: usize = 50;
 const SEED: u64 = 0;
 const IMAGE_SIZE: (u32, u32) = (400, 400);
 
 // 各個体の構造体を定義
 struct Individual {
-    genom_buffer: ImageBuffer<Rgb<u8>, Vec<u8>>,
-    fitness: i32,
+    genom_image_buffer: ImageBuffer<Rgb<u8>, Vec<u8>>,
+    genom_dynamic_image: DynamicImage,
+    fitness: f64,
 }
 
 impl Individual {
-    fn new(genom_buffer: ImageBuffer<Rgb<u8>, Vec<u8>>) -> Self {
+    fn new(genom_image_buffer: ImageBuffer<Rgb<u8>, Vec<u8>>) -> Self {
+        let genom_dynamic_image = DynamicImage::ImageRgb8(genom_image_buffer.clone());
         Individual {
-            genom_buffer,
-            fitness: 0,
+            genom_image_buffer,
+            genom_dynamic_image,
+            fitness: 0.0,
         }
     }
 
     // 目標画像とのSSIMを算出
     fn calc_fitness(&mut self, target_image: &DynamicImage) {
-        unimplemented!()
+        self.fitness = utils::ssim::calculate_ssim(target_image, &self.genom_dynamic_image)
     }
 }
 
@@ -47,14 +49,14 @@ fn initialize_generation(populations: usize, image_size: (u32, u32), seed: u64) 
         .into_par_iter()
         .map(|_| {
             let mut rng_clone = rng.clone();
-            let genom_buffer = ImageBuffer::from_fn(image_size.0, image_size.1, |_x, _y| {
+            let genom_image_buffer = ImageBuffer::from_fn(image_size.0, image_size.1, |_x, _y| {
                 Rgb([
                     rng_clone.sample(uniform),
                     rng_clone.sample(uniform),
                     rng_clone.sample(uniform),
                 ])
             });
-            Individual::new(genom_buffer)
+            Individual::new(genom_image_buffer)
         })
         .collect();
     generation
@@ -69,8 +71,8 @@ mod tests {
         let generation: Vec<Individual> = initialize_generation(POPULATIONS, IMAGE_SIZE, SEED);
 
         assert_eq!(generation.len(), POPULATIONS);
-        assert_eq!(generation[0].genom_buffer.dimensions(), IMAGE_SIZE);
-        assert_eq!(generation[0].fitness, 0);
+        assert_eq!(generation[0].genom_image_buffer.dimensions(), IMAGE_SIZE);
+        assert_eq!(generation[0].fitness, 0.0);
     }
 
     #[test]
@@ -87,6 +89,20 @@ mod tests {
         let target_image = load_image(file_path);
         let ssim = utils::ssim::calculate_ssim(&target_image, &target_image);
         assert_eq!(ssim, 1 as f64)
+    }
+
+    #[test]
+    fn eva_calc_fitness() {
+        let file_path = "./data/target_image.jpeg";
+        let target_image = load_image(file_path);
+        let resized_target_image = resize_image(target_image, IMAGE_SIZE.0, IMAGE_SIZE.1);
+        let mut generation: Vec<Individual> = initialize_generation(POPULATIONS, IMAGE_SIZE, SEED);
+
+        generation.par_iter_mut()
+            .for_each(|individual| {
+                individual.calc_fitness(&resized_target_image);
+                assert!((0.0 <= individual.fitness) && (individual.fitness <= 1.0));
+            });
     }
 }
 
