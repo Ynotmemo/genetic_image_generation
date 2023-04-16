@@ -1,4 +1,4 @@
-use image::{DynamicImage, ImageBuffer, Rgb};
+use image::{DynamicImage, GenericImageView, ImageBuffer, ImageDecoder, Rgb};
 
 // 画像ファイルの読み込み
 pub fn load_image(file_path: &str) -> DynamicImage {
@@ -21,4 +21,20 @@ pub fn save_dynamic_image_to_png(dynamic_image: &DynamicImage, file_path: &str) 
     let mut file = std::fs::File::create(file_path)?;
     dynamic_image.write_to(&mut file, image::ImageOutputFormat::Png)?;
     Ok(())
+}
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn load_resize_image() {
+        const image_size: (u32, u32) = (400, 400);
+        let file_path = "./data/target_image.jpeg";
+        let target_image = load_image(file_path);
+        let resized_target_image = resize_image(target_image, image_size.0, image_size.1);
+        assert_eq!(resized_target_image.dimensions(), image_size);
+    }
+
 }

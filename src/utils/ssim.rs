@@ -85,3 +85,19 @@ pub fn calculate_ssim(image1: &image::DynamicImage, image2: &image::DynamicImage
     let ssim = luma_similarity * contrast_similarity * structure_similarity;
     ssim
 }
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    use crate::utils::processing_image;
+
+    #[test]
+    fn eva_calculate_ssim() {
+        let file_path = "./data/target_image.jpeg";
+        let target_image = processing_image::load_image(file_path);
+        let ssim = calculate_ssim(&target_image, &target_image);
+        assert_eq!(ssim, 1 as f64)
+    }
+}

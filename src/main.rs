@@ -133,22 +133,6 @@ mod tests {
     }
 
     #[test]
-    fn load_resize_image() {
-        let file_path = "./data/target_image.jpeg";
-        let target_image = utils::processing_image::load_image(file_path);
-        let resized_target_image = utils::processing_image::resize_image(target_image, IMAGE_SIZE.0, IMAGE_SIZE.1);
-        assert_eq!(resized_target_image.dimensions(), IMAGE_SIZE);
-    }
-
-    #[test]
-    fn eva_calculate_ssim() {
-        let file_path = "./data/target_image.jpeg";
-        let target_image = utils::processing_image::load_image(file_path);
-        let ssim = utils::ssim::calculate_ssim(&target_image, &target_image);
-        assert_eq!(ssim, 1 as f64)
-    }
-
-    #[test]
     fn eva_calc_fitness() {
         let file_path = "./data/target_image.jpeg";
         let target_image = utils::processing_image::load_image(file_path);
