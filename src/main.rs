@@ -1,3 +1,4 @@
+use chrono::Local;
 use image::{DynamicImage, GenericImageView, ImageBuffer, Rgb};
 use rand::distributions::Uniform;
 use rand::prelude::*;
@@ -6,11 +7,8 @@ use rayon::prelude::*;
 use std::path::Path;
 
 mod utils;
-
-const POPULATIONS: usize = 10;
-const SEED: u64 = 0;
-const IMAGE_SIZE: (u32, u32) = (400, 400);
-const CROSS_RATE: f64 = 0.5;
+use utils::ssim::calculate_ssim;
+use utils::processing_image::{dynamic_image_to_image_buffer, load_image, resize_image, save_dynamic_image_to_png};
 
 // 各個体の構造体を定義
 #[derive(Clone)]
@@ -111,7 +109,7 @@ fn crossover_individuals(individual1: &Individual, individual2: &Individual, ima
 }
 
 // 次の世代を生成
-fn generate_next_generation(individual1: &Individual, individual2: &Individual, image_size: (u32, u32), cross_rate: f64, populations: usize, ) -> Vec<Individual> {
+fn generate_next_generation(individual1: &Individual, individual2: &Individual, image_size: (u32, u32), cross_rate: f64, populations: usize) -> Vec<Individual> {
     let crossed_images: Vec<Individual> = (0..populations)
         .into_par_iter()
         .map(|_| crossover_individuals(individual1, individual2, image_size, cross_rate))
@@ -119,14 +117,58 @@ fn generate_next_generation(individual1: &Individual, individual2: &Individual, 
     crossed_images
 }
 
+
+fn main() {
+    let population: usize = 10;
+    let max_generations: usize = 100;
+    let cross_rate = 0.5;
+    let file_path = "./data/target_image.jpeg";
+
+    let target_image = load_image(file_path);
+    let image_size = (target_image.width(), target_image.height());
+
+    // 現在の年月日をシード値に設定する
+    let seed = Local::now().format("%Y%m%d").to_string().parse::<u64>().unwrap();
+
+    // 第一世代の生成
+    let generation: Vec<Individual> = initialize_generation(population, image_size, seed);
+
+    let mut current_generaton = generation.clone();
+    // 世代ごとのループ
+    for generation_count in 1..=(max_generations+1) {
+        println!("Generation: {}", generation_count);
+        current_generaton
+            .iter_mut()
+            .for_each(|individual| {
+                individual.calc_fitness(&target_image);
+            });
+        let (largest_individual, second_largest_individual) = get_largest_two_fitness(&current_generaton);
+        // 最善画像の保存
+        if generation_count % 10 == 1{
+            save_dynamic_image_to_png(&largest_individual.genom_dynamic_image, &format!("./results/iteration{}.png", generation_count)).expect("save fig error"); // 修正
+        }
+        // 最高適合率の出力
+        println!("the best similarity to target image: {}", largest_individual.fitness);
+        // 次世代の生成
+        let next_generation = generate_next_generation(&largest_individual, &second_largest_individual, image_size, cross_rate, population);
+        //世代交代
+        current_generaton = next_generation;
+    }
+}
+
+
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    const POPULATIONS: usize = 10;
+    const SEED: u64 = 0;
+    const IMAGE_SIZE: (u32, u32) = (400, 400);
+    const CROSS_RATE: f64 = 0.5;
 
     #[test]
     fn create_the_first_generation() {
         let generation: Vec<Individual> = initialize_generation(POPULATIONS, IMAGE_SIZE, SEED);
-
         assert_eq!(generation.len(), POPULATIONS);
         assert_eq!(generation[0].genom_image_buffer.dimensions(), IMAGE_SIZE);
         assert_eq!(generation[0].fitness, 0.0);
@@ -135,8 +177,8 @@ mod tests {
     #[test]
     fn eva_calc_fitness() {
         let file_path = "./data/target_image.jpeg";
-        let target_image = utils::processing_image::load_image(file_path);
-        let resized_target_image = utils::processing_image::resize_image(target_image, IMAGE_SIZE.0, IMAGE_SIZE.1);
+        let target_image = load_image(file_path);
+        let resized_target_image = resize_image(target_image, IMAGE_SIZE.0, IMAGE_SIZE.1);
         let mut generation: Vec<Individual> = initialize_generation(POPULATIONS, IMAGE_SIZE, SEED);
 
         generation.par_iter_mut()
@@ -159,26 +201,4 @@ mod tests {
         assert_eq!(largest_individual.fitness, generation[5].fitness);
         assert_eq!(second_largest_individual.fitness, generation[7].fitness);
     }
-}
-
-
-fn main() -> Result<(), Box<dyn std::error::Error>> {
-
-
-    // unimplemented!();
-    let dad_image = utils::processing_image::load_image("./data/target_image.jpeg");
-    let mom_image = utils::processing_image::load_image("./data/temp_image.jpg");
-    let resized_dad = utils::processing_image::resize_image(dad_image, IMAGE_SIZE.0, IMAGE_SIZE.1);
-    let resized_mom = utils::processing_image::resize_image(mom_image, IMAGE_SIZE.0, IMAGE_SIZE.1);
-    let dad = Individual::new(utils::processing_image::dynamic_image_to_image_buffer(&resized_dad));
-    let mom = Individual::new(utils::processing_image::dynamic_image_to_image_buffer(&resized_mom));
-    let mut child = crossover_individuals(&dad, &mom, IMAGE_SIZE, CROSS_RATE);
-    child.calc_fitness(&resized_dad);
-    println!("similarity to dad: {}", child.fitness);
-    child.calc_fitness(&resized_mom);
-    println!("similarity to mom: {}", child.fitness);
-
-    utils::processing_image::save_dynamic_image_to_png(&child.genom_dynamic_image, "./results/child.png")?;
-
-    Ok(())
 }
