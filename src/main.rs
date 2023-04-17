@@ -3,6 +3,7 @@ use image::{DynamicImage, GenericImageView, ImageBuffer, Rgb};
 use rand::distributions::Uniform;
 use rand::prelude::*;
 use rand::Rng;
+use rand_isaac::isaac64::Isaac64Rng;
 use rayon::prelude::*;
 use std::path::Path;
 
@@ -38,17 +39,18 @@ impl Individual {
 
 // 第一世代を生成
 fn initialize_generation(populations: usize, image_size: (u32, u32), seed: u64) -> Vec<Individual> {
-    let rng = StdRng::seed_from_u64(seed);
-    let uniform = Uniform::new(0, 255);
-    let generation: Vec<Individual> = (0..populations)
+    let _seeds: Vec<u64> = (0..populations).map(|i| seed.wrapping_add(i as u64)).collect();
+    let uniform: Uniform<u8> = Uniform::new(0, 255);
+
+    let generation: Vec<Individual> = _seeds
         .into_par_iter()
-        .map(|_| {
-            let mut rng_clone = rng.clone();
+        .map(|s| {
+            let mut rng = Isaac64Rng::seed_from_u64(s);
             let genom_image_buffer = ImageBuffer::from_fn(image_size.0, image_size.1, |_x, _y| {
                 Rgb([
-                    rng_clone.sample(uniform),
-                    rng_clone.sample(uniform),
-                    rng_clone.sample(uniform),
+                    rng.sample(uniform),
+                    rng.sample(uniform),
+                    rng.sample(uniform),
                 ])
             });
             Individual::new(genom_image_buffer)
@@ -82,78 +84,80 @@ fn get_largest_two_fitness(generation: &[Individual]) -> (Individual, Individual
 
 // 2個体を交叉させて新しい個体を生成する関数
 fn crossover_individuals(individual1: &Individual, individual2: &Individual, image_size: (u32, u32), cross_rate: f64) -> Individual {
-
     let (width, height) = image_size;
-    let pixels: Vec<_> = (0..height)
-        .into_par_iter()
-        .flat_map(|h| {
-            (0..width)
-                .into_par_iter()
-                .map(move |w| {
-                    let mut rng = thread_rng();
-                    let choice = rng.gen_bool(cross_rate);
-                    let pixel = if choice {
-                        *individual1.genom_image_buffer.get_pixel(w, h)
-                    } else {
-                        *individual2.genom_image_buffer.get_pixel(w, h)
-                    };
-                    pixel
-                })
-                .collect::<Vec<_>>()
-        })
-        .collect();
+    let mut pixels = Vec::new();
+    let mut rng = rand::thread_rng();
+    for h in 0..height {
+        for w in 0..width {
+            let choice = rng.gen_bool(cross_rate);
+            let pixel = if choice {
+                *individual1.genom_image_buffer.get_pixel(w, h)
+            } else {
+                *individual2.genom_image_buffer.get_pixel(w, h)
+            };
+            pixels.push(pixel);
+        }
+    }
 
     let pixels_u8: Vec<u8> = pixels.into_iter().map(|p| p.0).flatten().collect();
     let genom_image_buffer = ImageBuffer::from_vec(width, height, pixels_u8).unwrap();
     Individual::new(genom_image_buffer)
 }
 
+
 // 次の世代を生成
 fn generate_next_generation(individual1: &Individual, individual2: &Individual, image_size: (u32, u32), cross_rate: f64, populations: usize) -> Vec<Individual> {
-    let crossed_images: Vec<Individual> = (0..populations)
-        .into_par_iter()
-        .map(|_| crossover_individuals(individual1, individual2, image_size, cross_rate))
-        .collect();
+    let mut crossed_images = Vec::with_capacity(populations);
+    for _ in 0..populations {
+        let crossed_image = crossover_individuals(individual1, individual2, image_size, cross_rate);
+        crossed_images.push(crossed_image);
+    }
     crossed_images
 }
 
 
 fn main() {
     let population: usize = 10;
-    let max_generations: usize = 100;
-    let cross_rate = 0.5;
-    let file_path = "./data/target_image.jpeg";
+    let max_generations: usize = 1000;
+    let cross_rate: f64 = 0.2;
+    let image_size: (u32, u32) = (3, 3);
+    let file_path: &str = "./data/target_image.jpeg";
 
-    let target_image = load_image(file_path);
-    let image_size = (target_image.width(), target_image.height());
+    let target_image: DynamicImage = load_image(file_path);
+
+    let resized_target_image: DynamicImage = resize_image(target_image, image_size.0, image_size.1);
+    save_dynamic_image_to_png(&resized_target_image, "./results/resized_target_image.png").expect("save fig error");
+    // let image_size: (u32, u32) = (target_image.width(), target_image.height());
 
     // 現在の年月日をシード値に設定する
-    let seed = Local::now().format("%Y%m%d").to_string().parse::<u64>().unwrap();
+    let seed: u64 = Local::now().format("%Y%m%d").to_string().parse::<u64>().unwrap();
 
     // 第一世代の生成
-    let generation: Vec<Individual> = initialize_generation(population, image_size, seed);
+    let mut current_generation: Vec<Individual> = initialize_generation(population, image_size, seed);
 
-    let mut current_generaton = generation.clone();
+
     // 世代ごとのループ
     for generation_count in 1..=(max_generations+1) {
         println!("Generation: {}", generation_count);
-        current_generaton
+        current_generation
             .iter_mut()
             .for_each(|individual| {
-                individual.calc_fitness(&target_image);
+                individual.calc_fitness(&resized_target_image);
             });
-        let (largest_individual, second_largest_individual) = get_largest_two_fitness(&current_generaton);
-        // 最善画像の保存
+        let (largest_individual, second_largest_individual) = get_largest_two_fitness(&current_generation);
+        // イテレーション10回毎に
         if generation_count % 10 == 1{
+            // 最高適合率の出力
+            println!("the best similarity to target image: {}", largest_individual.fitness);
+        // 最善画像の保存
             save_dynamic_image_to_png(&largest_individual.genom_dynamic_image, &format!("./results/iteration{}.png", generation_count)).expect("save fig error"); // 修正
         }
-        // 最高適合率の出力
-        println!("the best similarity to target image: {}", largest_individual.fitness);
         // 次世代の生成
-        let next_generation = generate_next_generation(&largest_individual, &second_largest_individual, image_size, cross_rate, population);
+        let mut next_generation: Vec<Individual> = generate_next_generation(&largest_individual, &second_largest_individual, image_size, cross_rate, population);
+
         //世代交代
-        current_generaton = next_generation;
-    }
+        current_generation = next_generation;
+        }
 }
 
 
