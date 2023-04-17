@@ -63,7 +63,6 @@ fn initialize_generation(populations: usize, image_size: (u32, u32), seed: u64) 
 fn get_largest_two_fitness(generation: &[Individual]) -> (Individual, Individual) {
     // 世代の長さを取得
     let len = generation.len();
-
     // 世代が空または長さが1の場合はエラーを返す
     if len == 0 {
         panic!("No individuals in the generation.");
