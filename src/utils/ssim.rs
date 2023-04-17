@@ -90,7 +90,6 @@ pub fn calculate_ssim(image1: &image::DynamicImage, image2: &image::DynamicImage
 #[cfg(test)]
 mod tests {
     use super::*;
-
     use crate::utils::processing_image;
 
     #[test]
