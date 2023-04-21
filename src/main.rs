@@ -9,6 +9,7 @@ use std::path::Path;
 
 mod utils;
 use utils::ssim::calculate_ssim;
+use utils::diff_sum::calculate_diff_sum;
 use utils::processing_image::{dynamic_image_to_image_buffer, load_image, resize_image, save_dynamic_image_to_png};
 
 // 各個体の構造体を定義
@@ -31,7 +32,7 @@ impl Individual {
 
     // 目標画像とのSSIMを算出
     fn calc_fitness(&mut self, target_image: &DynamicImage) {
-        self.fitness = utils::ssim::calculate_ssim(target_image, &self.genom_dynamic_image)
+        self.fitness = calculate_ssim(target_image, &self.genom_dynamic_image)
     }
 }
 
